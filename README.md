@@ -1,46 +1,46 @@
 # Learn Kubernetes by Example 
 
-1. Namespace
-2. Pod
-3. ConfigMap
-4. Secret
-5. ServiceAccount
+1. [Namespace](Namespace/)
+2. [Pod](Pod/)
+3. [ConfigMap](ConfigMap/)
+4. [Secret](Secret/)
+5. [ServiceAccount](ServiceAccount/)
 
-6. Deployment
-7. DaemonSet
-8. Job
-9. CronJob
+6. [Deployment](Deployment/)
+7. [DaemonSet](DaemonSet/)
+8. [Job](Job/)
+9. [CronJob](CronJob/)
 
-10. Service
-11. Endpoints
-12. Ingress
-13. NetworkPolicy
+10. [Service](Service/)
+11. [Endpoints](Endpoints/)
+12. [Ingress](Ingress/)
+13. [NetworkPolicy](NetworkPolicy/)
 
-14. PersistentVolume
-15. PersistentVolumeClaim
-16. StorageClass
-17. StatefulSet
+14. [PersistentVolume](PersistentVolume/)
+15. [PersistentVolumeClaim](PersistentVolumeClaim/)
+16. [StorageClass](StorageClass/)
+17. [StatefulSet](StatefulSet/)
 
-18. LimitRange
-19. ResourceQuotas
-20. PriorityClass
-21. PodDisruptionBudget
+18. [LimitRange](LimitRange/)
+19. [ResourceQuotas](ResourceQuotas/)
+20. [PriorityClass](PriorityClass/)
+21. [PodDisruptionBudget](PodDisruptionBudget/)
 
-22. Role
-23. RoleBinding
-24. ClusterRole
-25. ClusterRoleBinding
+22. [Role](Role/)
+23. [RoleBinding](RoleBinding/)
+24. [ClusterRole](ClusterRole/)
+25. [ClusterRoleBinding](ClusterRoleBinding/)
 
-26. broken-Pod
-27. broken-Deployment
-28. broken-Secret
+26. [broken-Pod](broken-Pod/)
+27. [broken-Deployment](broken-Deployment/)
+28. [broken-Secret](broken-Secret/)
 
-29. CustomResourceDefinition
-30. Istio
+29. [CustomResourceDefinition](CustomResourceDefinition/)
+30. [Istio](Istio/)
 
-31. cloud-providers
-32. plugins
-33. tests
+31. [cloud-providers](cloud-providers/)
+32. [plugins](plugins/)
+33. [tests](tests/)
 
 ## Setup Lab Environment
 
