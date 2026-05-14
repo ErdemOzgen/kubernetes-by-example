@@ -1,0 +1,56 @@
+# To test this, run
+#   kubectl run -i --tty load-generator --rm --image=nginx --restart=Never -- /bin/sh -c "while sleep 0.001; do curl -v $(kubectl get service -o yaml hpa-simple-service -o=jsonpath={.spec.clusterIP}); done"
+# Wait 5 minutes for the default 'cool-down period' to take effect.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-simple-deployment
+spec:
+  selector:
+    matchLabels:
+      app: hpa-simple-deployment-app
+  template:
+    metadata:
+      labels:
+        app: hpa-simple-deployment-app
+    spec:
+      containers:
+        - name: hpa-simple-deployment-container
+          image: registry.k8s.io/hpa-example
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: 500m
+            requests:
+              cpu: 200m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpa-simple-deployment-service
+spec:
+  ports:
+    - port: 80
+  selector:
+    app: hpa-simple-deployment-app
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-simple-hpa
+spec:
+  maxReplicas: 10
+  metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 1
+          type: Utilization
+      type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-simple-deployment
