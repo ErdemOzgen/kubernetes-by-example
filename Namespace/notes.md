@@ -217,7 +217,7 @@ kubectl -n dev get services
 kubectl -n dev get secrets
 ```
 
-## Cluster-scoped resources
+## cluster scoped resources
 
 These do **not** belong to any namespace:
 
@@ -249,7 +249,7 @@ kubectl api-resources --namespaced=true
 kubectl api-resources --namespaced=false
 ```
 
-Kubernetes explicitly distinguishes namespaced resources from cluster-wide resources. ([Kubernetes][1])
+Kubernetes explicitly distinguishes namespaced resources from cluster wide resources. ([Kubernetes][1])
 
 ---
 
@@ -503,13 +503,13 @@ Separate cluster = stronger isolation boundary.
 There are four common RBAC objects:
 
 ```text
-Role               namespace-scoped permissions
+Role               namespace scoped permissions
 RoleBinding        binds Role/ClusterRole to user/group/serviceaccount inside namespace
-ClusterRole        cluster-scoped permission definition
-ClusterRoleBinding binds permissions cluster-wide
+ClusterRole        cluster scoped permission definition
+ClusterRoleBinding binds permissions cluster wide
 ```
 
-## Give a user read-only access to namespace `dev`
+## Give a user read only access to namespace `dev`
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -853,7 +853,7 @@ If using host rules locally, add entries to `/etc/hosts` inside WSL or Windows d
 
 # 16. Namespace and Helm
 
-Helm releases are namespace-scoped by default.
+Helm releases are namespace scoped by default.
 
 Install into namespace:
 
@@ -1111,7 +1111,7 @@ kubectl -n app-dev get pods,svc,ingress
 
 ---
 
-# 22. Production-grade namespace design
+# 22. Production grade namespace design
 
 A mature setup usually looks like this:
 
