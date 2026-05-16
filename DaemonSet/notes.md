@@ -1992,6 +1992,554 @@ Job/CronJob = completion-oriented batch controller.
 
 For production, treat DaemonSets as privileged infrastructure by default: they often touch host networking, host filesystems, node identity, logs, devices, or runtime internals. Design their selectors, tolerations, resource requests, update strategy, and security context carefully.
 
+---
+
+# 22. Using Deployment and DaemonSet together
+
+A **Deployment** and a **DaemonSet** can coexist in the same cluster and namespace. They serve distinct roles:
+
+```text
+Deployment = run the application as N replicas anywhere in the cluster
+DaemonSet  = run one agent/side component on every eligible node
+```
+
+The most common combined pattern:
+
+```text
+Web/API app        → Deployment
+Log/monitor agent  → DaemonSet
+Service            → exposes Deployment Pods to the rest of the cluster
+```
+
+---
+
+## 22.1 Core difference revisited
+
+### Deployment
+
+A Deployment says:
+
+```text
+"Run 3 copies of this application somewhere in the cluster."
+```
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  labels:
+    app: web-app
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: web-app
+
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25
+          ports:
+            - containerPort: 80
+```
+
+The key field is `replicas: 3`. Kubernetes schedules those 3 Pods wherever capacity exists:
+
+```text
+Deployment
+  └── ReplicaSet
+        ├── web-app Pod   (node-1 or node-2 or node-3)
+        ├── web-app Pod
+        └── web-app Pod
+```
+
+---
+
+### DaemonSet
+
+A DaemonSet says:
+
+```text
+"Run exactly one copy of this Pod on every eligible node."
+```
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent
+  labels:
+    app: node-agent
+spec:
+  selector:
+    matchLabels:
+      app: node-agent
+
+  template:
+    metadata:
+      labels:
+        app: node-agent
+    spec:
+      containers:
+        - name: agent
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              while true; do
+                echo "Node agent running on ${NODE_NAME}"
+                sleep 30
+              done
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+```
+
+There is no `replicas` field. Pod count equals node count:
+
+```text
+2 nodes  →  2 DaemonSet Pods
+5 nodes  →  5 DaemonSet Pods
+10 nodes → 10 DaemonSet Pods
+```
+
+---
+
+## 22.2 Side-by-side comparison
+
+| Property                     | Deployment                       | DaemonSet                                            |
+| ---------------------------- | -------------------------------- | ---------------------------------------------------- |
+| Purpose                      | Run application workload         | Run node-level agent or infrastructure component     |
+| Pod count                    | Controlled by `replicas`         | One per eligible node                                |
+| Managed through ReplicaSet   | Yes                              | No                                                   |
+| Typical workloads            | Web app, API, frontend, backend  | Log collector, metrics agent, CNI plugin, security agent |
+| New node added               | Scheduler may place a Pod there  | DaemonSet controller automatically places a Pod      |
+| Guaranteed one Pod per node  | No                               | Yes, on every eligible node                          |
+
+---
+
+## 22.3 Combined example manifest
+
+Save as `deployment-daemonset-demo.yaml`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  labels:
+    app: web-app
+    component: frontend
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: web-app
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+
+  template:
+    metadata:
+      labels:
+        app: web-app
+        component: frontend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 80
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-service
+  labels:
+    app: web-app
+spec:
+  type: ClusterIP
+
+  selector:
+    app: web-app
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent
+  labels:
+    app: node-agent
+spec:
+  selector:
+    matchLabels:
+      app: node-agent
+
+  updateStrategy:
+    type: RollingUpdate
+
+  template:
+    metadata:
+      labels:
+        app: node-agent
+    spec:
+      containers:
+        - name: node-agent
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /bin/sh
+            - -c
+
+          args:
+            - |
+              while true; do
+                echo "Node agent running on node: ${NODE_NAME}"
+                echo "Trying to reach web-app-service..."
+                wget -qO- http://web-app-service.default.svc.cluster.local || true
+                sleep 30
+              done
+
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+```
+
+Apply and inspect:
+
+```bash
+kubectl apply -f deployment-daemonset-demo.yaml
+
+kubectl get deployments
+kubectl get daemonsets
+kubectl get pods -o wide
+kubectl get svc
+```
+
+---
+
+## 22.4 Expected cluster state
+
+On a 3-node cluster:
+
+```text
+Deployment web-app   → DESIRED: 3
+DaemonSet node-agent → DESIRED: 3
+```
+
+```bash
+kubectl get pods -o wide
+```
+
+Example output:
+
+```text
+NAME                     READY   STATUS    NODE
+web-app-xxxx             1/1     Running   worker-1
+web-app-yyyy             1/1     Running   worker-2
+web-app-zzzz             1/1     Running   worker-3
+node-agent-abcde         1/1     Running   worker-1
+node-agent-fghij         1/1     Running   worker-2
+node-agent-klmno         1/1     Running   worker-3
+```
+
+```text
+web-app    pods → owned by Deployment (via ReplicaSet)
+node-agent pods → owned by DaemonSet
+```
+
+---
+
+## 22.5 How the DaemonSet Pod reaches the Deployment Pods
+
+The node-agent container calls:
+
+```bash
+wget -qO- http://web-app-service.default.svc.cluster.local
+```
+
+Traffic path:
+
+```text
+node-agent Pod
+    ↓
+web-app-service  (ClusterIP Service)
+    ↓
+one of the web-app Deployment Pods
+```
+
+The DaemonSet Pod uses **Service DNS**, not a direct Pod IP. Pod IPs are ephemeral; Service DNS is stable.
+
+Short form (when in the same namespace):
+
+```bash
+wget -qO- http://web-app-service
+```
+
+Full DNS name:
+
+```text
+web-app-service.default.svc.cluster.local
+               ^^^^^^^
+               namespace name
+```
+
+---
+
+## 22.6 Why the Service only selects Deployment Pods
+
+The Service selector is:
+
+```yaml
+selector:
+  app: web-app
+```
+
+Deployment Pod labels:
+
+```yaml
+labels:
+  app: web-app        ← matched
+```
+
+DaemonSet Pod labels:
+
+```yaml
+labels:
+  app: node-agent     ← not matched
+```
+
+Result:
+
+```text
+Service backend → web-app Pods only
+node-agent Pods → not in the Service endpoint list
+```
+
+This is intentional. The Service exposes application workload, not infrastructure agents.
+
+---
+
+## 22.7 Are Deployment and DaemonSet linked to each other?
+
+No. There is no owner relationship:
+
+```text
+Deployment → DaemonSet   ✗
+DaemonSet  → Deployment  ✗
+```
+
+They are independent controllers. Their cooperation is by design, not by direct coupling:
+
+```text
+Deployment  = business / application workload
+DaemonSet   = node-level infrastructure workload
+```
+
+A common real-world example:
+
+```text
+my-api Deployment
+  └─ produces logs to stdout
+
+fluent-bit DaemonSet
+  └─ reads /var/log/containers on each node
+  └─ ships logs to Elasticsearch / Loki / Splunk / Kafka
+```
+
+---
+
+## 22.8 Log collection with hostPath (real pattern)
+
+Production DaemonSets for logging typically mount the host log directory:
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-agent
+spec:
+  selector:
+    matchLabels:
+      app: log-agent
+
+  template:
+    metadata:
+      labels:
+        app: log-agent
+    spec:
+      containers:
+        - name: log-agent
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              while true; do
+                echo "Container logs on this node:"
+                ls -lah /var/log/containers || true
+                sleep 60
+              done
+
+          volumeMounts:
+            - name: container-logs
+              mountPath: /var/log/containers
+              readOnly: true
+
+      volumes:
+        - name: container-logs
+          hostPath:
+            path: /var/log/containers
+            type: DirectoryOrCreate
+```
+
+Architecture:
+
+```text
+Node 1
+├── app Pod       (stdout → /var/log/containers/...)
+├── app Pod
+└── log-agent DaemonSet Pod
+      └── reads /var/log/containers read-only
+      └── ships to central logging system
+
+Node 2
+├── app Pod
+└── log-agent DaemonSet Pod
+      └── reads /var/log/containers read-only
+```
+
+Security note: `hostPath` is powerful and must be used carefully. Always mount read-only when possible, drop all capabilities, and run as non-root.
+
+---
+
+## 22.9 Scaling difference
+
+Scale the Deployment:
+
+```bash
+kubectl scale deployment web-app --replicas=5
+kubectl get pods -l app=web-app -o wide
+```
+
+Deployment Pod count becomes 5. The DaemonSet is unaffected:
+
+```bash
+kubectl get daemonset node-agent
+kubectl get pods -l app=node-agent -o wide
+```
+
+On a 3-node cluster:
+
+```text
+web-app Pods:    5   (controlled by replicas)
+node-agent Pods: 3   (controlled by node count)
+```
+
+---
+
+## 22.10 Rolling update for both controllers
+
+Deployment image update:
+
+```bash
+kubectl set image deployment/web-app nginx=nginx:1.26
+kubectl rollout status deployment/web-app
+```
+
+DaemonSet image update:
+
+```bash
+kubectl set image daemonset/node-agent node-agent=busybox:1.37
+kubectl rollout status daemonset/node-agent
+```
+
+Both support `RollingUpdate` strategy but each controller manages it independently.
+
+---
+
+## 22.11 Summary
+
+Deployment YAML shape:
+
+```yaml
+spec:
+  replicas: 3
+  selector:
+  template:
+```
+
+DaemonSet YAML shape:
+
+```yaml
+spec:
+  selector:
+  template:
+```
+
+No `replicas` field in DaemonSet.
+
+Typical production topology:
+
+```text
+API Deployment          → business logic
+Frontend Deployment     → UI serving
+Worker Deployment       → background jobs
+Redis StatefulSet       → stateful data store
+Fluent Bit DaemonSet    → node-level log shipping
+Node Exporter DaemonSet → node-level metrics
+CNI Plugin DaemonSet    → node-level networking
+Ingress Controller      → Deployment or DaemonSet depending on traffic model
+```
+
+Mental model:
+
+```text
+Deployment = app workload   (how many replicas do I need?)
+DaemonSet  = node workload  (does every node have this agent?)
+```
+
 [1]: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/ "DaemonSet | Kubernetes"
 [2]: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/ "Assigning Pods to Nodes | Kubernetes"
 [3]: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ "Taints and Tolerations | Kubernetes"
