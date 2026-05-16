@@ -1691,6 +1691,129 @@ Do not confuse Service with HTTP routing.
 Remember: selector mismatch is the classic Service failure.
 ```
 
+---
+
+# 31. Repository YAML integration
+
+This section maps the YAML manifests in this folder to the concepts in this document and adds the missing pieces.
+
+Already covered in earlier sections:
+
+```text
+simple.yaml
+  -> Basic ClusterIP Service with selector + port/targetPort.
+
+multi-port-service.yaml
+  -> Multi-port Service; each port has a unique name.
+
+spec.ports.nodePort/node-port.yaml
+  -> NodePort Service with explicit nodePort.
+
+spec.type/load-balancer.yaml
+  -> LoadBalancer Service behavior and caveats.
+
+spec.externalName/external-name.yaml
+  -> ExternalName DNS alias Service (no proxying).
+
+headless-service/headless-service.yaml
+spec.clusterIP/headless-service.yaml
+  -> Headless Service via clusterIP: None.
+```
+
+Not previously explained in detail (now integrated below):
+
+```text
+spec.externalIPs/external-ips.yaml
+Pod.spec.subdomain/subdomain.yaml
+```
+
+---
+
+# 32. `externalIPs` Service (from `spec.externalIPs/external-ips.yaml`)
+
+Repository manifest pattern:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-external-ips-service
+spec:
+  selector:
+    app: MyApp
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 9376
+  externalIPs:
+    - 80.11.12.10
+```
+
+What it means:
+
+```text
+The Service is still a normal selector-based Service for backend Pod discovery.
+In addition, traffic sent to 80.11.12.10:80 can be accepted and forwarded to this Service.
+Kubernetes does not allocate this IP for you.
+You (or your network team/cloud setup) must route that IP to cluster nodes.
+```
+
+Important operational note:
+
+```text
+externalIPs is not a cloud load balancer API.
+It relies on external network routing and can be risky if used casually.
+For public production exposure, LoadBalancer + Ingress/Gateway is usually safer.
+```
+
+Quick verify flow:
+
+```bash
+kubectl apply -f spec.externalIPs/external-ips.yaml
+kubectl get svc service-external-ips-service -o yaml | grep -A3 externalIPs
+kubectl get endpointslice -l kubernetes.io/service-name=service-external-ips-service
+```
+
+---
+
+# 33. Pod `hostname` + `subdomain` with headless Service (from `Pod.spec.subdomain/subdomain.yaml`)
+
+This manifest combines:
+
+```text
+1 headless Service named subdomain-simple-subdomain-service
+2 Pods with explicit hostname and subdomain fields
+```
+
+Why this exists:
+
+```text
+Headless Service enables per-Pod DNS records.
+Pod hostname/subdomain gives each Pod a stable FQDN entry.
+This is useful for peer-to-peer discovery patterns.
+```
+
+Conceptual result in default namespace:
+
+```text
+subdomain-simple-hostname-1.subdomain-simple-subdomain-service.default.svc.cluster.local
+subdomain-simple-hostname-2.subdomain-simple-subdomain-service.default.svc.cluster.local
+```
+
+This is different from a normal ClusterIP Service because DNS can identify individual Pods, not just one virtual Service IP.
+
+Quick verify flow:
+
+```bash
+kubectl apply -f Pod.spec.subdomain/subdomain.yaml
+kubectl get svc subdomain-simple-subdomain-service
+kubectl get pods -l name=subdomain-simple-selector -o wide
+kubectl exec -it subdomain-simple-pod-1 -- nslookup subdomain-simple-hostname-2.subdomain-simple-subdomain-service.default.svc.cluster.local
+```
+
+If DNS tooling is missing in `busybox`, use a dedicated dnsutils Pod (same idea used in your headless-service example).
+
 [1]: https://kubernetes.io/docs/tutorials/services/connect-applications-service/ "Connecting Applications with Services"
 [2]: https://kubernetes.io/docs/concepts/services-networking/ "Services, Load Balancing, and Networking"
 [3]: https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/ "EndpointSlices"
