@@ -1,0 +1,9 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: example-gateway-class
+spec:
+  # Replace this value with your controller's expected name.
+  # Example for Kong: konghq.com/kic-gateway-controller
+  controllerName: example.com/gateway-controller

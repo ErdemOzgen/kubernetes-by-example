@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-api-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway-api-demo
+  template:
+    metadata:
+      labels:
+        app: gateway-api-demo
+    spec:
+      containers:
+        - name: app
+          image: hashicorp/http-echo:1.0.0
+          args:
+            - "-text=hello from gateway api"
+          ports:
+            - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-api-demo-svc
+spec:
+  selector:
+    app: gateway-api-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5678

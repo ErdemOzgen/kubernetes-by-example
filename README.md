@@ -1,5 +1,9 @@
 # Learn Kubernetes by Example 
 
+<p align="center">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/Kubernetes_logo_without_workmark.svg/250px-Kubernetes_logo_without_workmark.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail" alt="Kubernetes logo" />
+</p>
+
 1. [Namespace](Namespace/)
 2. [Pod](Pod/)
 3. [ConfigMap](ConfigMap/)
@@ -14,33 +18,34 @@
 10. [Service](Service/)
 11. [Endpoints](Endpoints/)
 12. [Ingress](Ingress/)
-13. [NetworkPolicy](NetworkPolicy/)
+13. [GatewayAPI](GatewayAPI/)
+14. [NetworkPolicy](NetworkPolicy/)
 
-14. [PersistentVolume](PersistentVolume/)
-15. [PersistentVolumeClaim](PersistentVolumeClaim/)
-16. [StorageClass](StorageClass/)
-17. [StatefulSet](StatefulSet/)
+15. [PersistentVolume](PersistentVolume/)
+16. [PersistentVolumeClaim](PersistentVolumeClaim/)
+17. [StorageClass](StorageClass/)
+18. [StatefulSet](StatefulSet/)
 
-18. [LimitRange](LimitRange/)
-19. [ResourceQuotas](ResourceQuotas/)
-20. [PriorityClass](PriorityClass/)
-21. [PodDisruptionBudget](PodDisruptionBudget/)
+19. [LimitRange](LimitRange/)
+20. [ResourceQuotas](ResourceQuotas/)
+21. [PriorityClass](PriorityClass/)
+22. [PodDisruptionBudget](PodDisruptionBudget/)
 
-22. [Role](Role/)
-23. [RoleBinding](RoleBinding/)
-24. [ClusterRole](ClusterRole/)
-25. [ClusterRoleBinding](ClusterRoleBinding/)
+23. [Role](Role/)
+24. [RoleBinding](RoleBinding/)
+25. [ClusterRole](ClusterRole/)
+26. [ClusterRoleBinding](ClusterRoleBinding/)
 
-26. [broken-Pod](broken-Pod/)
-27. [broken-Deployment](broken-Deployment/)
-28. [broken-Secret](broken-Secret/)
+27. [broken-Pod](broken-Pod/)
+28. [broken-Deployment](broken-Deployment/)
+29. [broken-Secret](broken-Secret/)
 
-29. [CustomResourceDefinition](CustomResourceDefinition/)
-30. [Istio](Istio/)
+30. [CustomResourceDefinition](CustomResourceDefinition/)
+31. [Istio](Istio/)
 
-31. [cloud-providers](cloud-providers/)
-32. [plugins](plugins/)
-33. [tests](tests/)
+32. [cloud-providers](cloud-providers/)
+33. [plugins](plugins/)
+34. [tests](tests/)
 
 ## Setup Lab Environment
 

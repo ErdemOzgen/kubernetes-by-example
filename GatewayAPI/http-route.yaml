@@ -1,0 +1,19 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gateway-api-demo-route
+spec:
+  parentRefs:
+    - name: example-gateway
+      sectionName: http
+  hostnames:
+    - "demo.local"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: gateway-api-demo-svc
+          port: 80
