@@ -2144,6 +2144,388 @@ That lab teaches:
 
 ---
 
+# 31. Example YAML files in this directory
+
+The following files are located next to this note. Each section shows the full manifest and explains every meaningful choice.
+
+---
+
+## `simple-deployment.yaml` — Minimal two-replica Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployments-simple-deployment-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: deployments-simple-deployment-app
+  template:
+    metadata:
+      labels:
+        app: deployments-simple-deployment-app
+    spec:
+      containers:
+        - name: busybox
+          image: busybox
+          command:
+            - sleep
+            - "3600"
+```
+
+**What this does:**
+
+| Field | Purpose |
+|---|---|
+| `replicas: 2` | Keeps two identical Pods alive at all times |
+| `selector.matchLabels` | Tells the Deployment which Pods it owns |
+| `template.metadata.labels` | Must match `selector.matchLabels` exactly |
+| `image: busybox` | Lightweight utility image; useful for debugging and experiments |
+| `command: [sleep, "3600"]` | Keeps the container alive for one hour without doing real work |
+
+**What is missing (intentionally):**
+
+- No resource requests/limits → not suitable for production scheduling
+- No readiness or liveness probes → Kubernetes cannot verify health
+- No immutable image tag → `busybox` resolves to `latest`, which is mutable
+
+**Apply and explore:**
+
+```bash
+kubectl apply -f simple-deployment.yaml
+kubectl get deploy,rs,pods
+kubectl exec -it <pod-name> -- sh
+kubectl delete -f simple-deployment.yaml
+```
+
+---
+
+## `simple-deployment-with-environment.yaml` — Env vars from literal, Secret, and ConfigMap
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config-map
+data:
+  topic: kafka-config-map-topic
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: database-secrets
+type: Opaque
+data:
+  password: cGFzc3dvcmQ=   # base64 of "password"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployments-simple-deployment-with-environment-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: deployments-simple-deployment-with-environment-app
+  template:
+    metadata:
+      labels:
+        app: deployments-simple-deployment-with-environment-app
+    spec:
+      containers:
+        - name: busybox
+          image: busybox
+          command:
+            - sleep
+            - "3600"
+          env:
+            - name: DEMO_GREETING
+              value: "Hello from the environment"
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: password
+            - name: KAFKA_TOPIC
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-config-map
+                  key: topic
+```
+
+**What this does:**
+
+This file defines three Kubernetes objects in a single file separated by `---`.
+
+| Object | Purpose |
+|---|---|
+| `ConfigMap` (kafka-config-map) | Stores non-sensitive configuration; here a Kafka topic name |
+| `Secret` (database-secrets) | Stores sensitive data in base64; here a database password |
+| `Deployment` | Runs Pods that read both objects as environment variables |
+
+**Three env injection patterns in one manifest:**
+
+| Pattern | Field | Use case |
+|---|---|---|
+| Literal value | `value: "Hello from the environment"` | Static config that is the same everywhere |
+| From Secret | `secretKeyRef` | Sensitive data; never hard-code in plain YAML |
+| From ConfigMap | `configMapKeyRef` | Non-sensitive config that varies per environment |
+
+**Important: base64 is not encryption.**
+
+`cGFzc3dvcmQ=` decodes to `password`. Secrets are only base64-encoded by default, not encrypted. In production, use an external secrets manager (Vault, AWS Secrets Manager, Sealed Secrets) or enable etcd encryption at rest.
+
+**Verify env vars inside the Pod:**
+
+```bash
+kubectl apply -f simple-deployment-with-environment.yaml
+kubectl exec -it <pod-name> -- env | grep -E 'DEMO|DATABASE|KAFKA'
+kubectl delete -f simple-deployment-with-environment.yaml
+```
+
+**What happens if a referenced Secret or ConfigMap does not exist:**
+
+The Pod fails to start with `CreateContainerConfigError`. The Deployment stays alive but reports unavailable Pods. Fix by creating the missing object and the Pod starts automatically.
+
+---
+
+## `simple-deployment-privileged.yaml` — Deployment with commented-out security capabilities
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployments-simple-deployment-privileged-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: deployments-simple-deployment-privileged-app
+  template:
+    metadata:
+      labels:
+        app: deployments-simple-deployment-privileged-app
+    spec:
+      containers:
+        - name: busybox
+          image: busybox
+          command:
+            - /bin/sh
+            - -c
+            - sleep 3600
+            # securityContext:
+            #   capabilities:
+            #     add:
+            #       - CAP_SYS_ADMIN
+```
+
+**What this does:**
+
+The manifest is functionally identical to `simple-deployment.yaml` at runtime. The commented block shows what it would look like to add a Linux capability to a container.
+
+**What the commented block means:**
+
+```yaml
+securityContext:
+  capabilities:
+    add:
+      - CAP_SYS_ADMIN
+```
+
+`CAP_SYS_ADMIN` is one of the most powerful Linux capabilities. It allows the container to perform a wide range of privileged operations (mounting filesystems, modifying kernel parameters, etc.).
+
+**Security guidance — do not enable `CAP_SYS_ADMIN` unless strictly necessary:**
+
+| Risk | Detail |
+|---|---|
+| Container escape | Wide blast radius if the container is compromised |
+| Cluster-wide impact | Process inside Pod can interact with host kernel |
+| Policy violation | Most admission controllers (OPA Gatekeeper, Kyverno) block it by default |
+
+The production baseline shown in section 24 does the opposite — drop all capabilities:
+
+```yaml
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+```
+
+This file is useful as a reference for the syntax when you legitimately need to add a specific capability (for example `NET_BIND_SERVICE` to bind to ports below 1024 without root).
+
+---
+
+## `webserver.yaml` — Python HTTP server Deployment + ClusterIP Service
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webserver-simple-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webserver-simple-app
+  template:
+    metadata:
+      labels:
+        app: webserver-simple-app
+    spec:
+      containers:
+        - name: webserver-simple-container
+          image: python:3
+          command:
+            - python
+            - -m
+            - http.server
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webserver-simple-service
+spec:
+  selector:
+    app: webserver-simple-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+```
+
+**What this does:**
+
+Two objects in one file: a Deployment running a web server, and a Service that exposes it inside the cluster.
+
+| Part | Detail |
+|---|---|
+| `python -m http.server` | Python's built-in HTTP server; serves the current directory on port 8000 |
+| `containerPort: 8000` | Documents the port the container listens on (informational; does not publish externally) |
+| `Service.spec.selector` | Matches `app: webserver-simple-app`; routes traffic to matching Pods |
+| `port: 80` | The port clients connect to on the Service |
+| `targetPort: 8000` | The port the container actually listens on |
+
+**Service type is not set → defaults to `ClusterIP`.**
+
+The Service is only reachable from inside the cluster. To access it locally:
+
+```bash
+kubectl apply -f webserver.yaml
+kubectl port-forward svc/webserver-simple-service 8080:80
+curl http://localhost:8080
+```
+
+**Deployment selector vs Service selector:**
+
+```text
+Deployment selector  → controls which Pods the Deployment manages (ownership)
+Service selector     → controls which Pods receive network traffic (routing)
+
+Both use: app: webserver-simple-app
+They match here, but they are completely separate mechanisms.
+```
+
+**Cleanup:**
+
+```bash
+kubectl delete -f webserver.yaml
+```
+
+---
+
+## `init-container-msg.yaml` — Init container writing to a shared volume
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: init-container-msg-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: init-container-msg-app
+  template:
+    metadata:
+      labels:
+        app: init-container-msg-app
+    spec:
+      initContainers:
+        - name: init-container-msg-container-init
+          image: busybox
+          command:
+            - "/bin/sh"
+            - "-c"
+            - "echo 'message from init' > /init-container-msg-mount-path/this"
+          volumeMounts:
+            - mountPath: /init-container-msg-mount-path
+              name: init-container-msg-volume
+      containers:
+        - name: init-container-msg-container-main
+          image: busybox
+          command:
+            - "/bin/sh"
+            - "-c"
+            - "while true; do cat /init-container-msg-mount-path/this; sleep 5; done"
+          volumeMounts:
+            - mountPath: /init-container-msg-mount-path
+              name: init-container-msg-volume
+      volumes:
+        - name: init-container-msg-volume
+          emptyDir: {}
+```
+
+**What this does:**
+
+Demonstrates the init container pattern using a shared in-memory volume.
+
+**Execution order:**
+
+```text
+1. Volume (emptyDir) is created — starts empty
+2. initContainer runs
+   → writes "message from init" to /init-container-msg-mount-path/this
+   → exits 0
+3. main container starts (only after initContainer exits successfully)
+   → reads the file every 5 seconds and prints its content to stdout
+```
+
+**Key concepts:**
+
+| Concept | Detail |
+|---|---|
+| `initContainers` | Run to completion before any `containers` start |
+| `emptyDir` | Ephemeral volume tied to Pod lifetime; starts empty each time the Pod is created |
+| Shared volume | Both init and main container mount the same volume by name |
+| Init container failure | If init exits non-zero, Kubernetes restarts it; main container never starts |
+
+**Real-world init container use cases:**
+
+- Waiting for a database or external service to be ready before the app starts
+- Cloning a Git repository into a shared volume for the main container to serve
+- Running database migrations before the application server starts
+- Fetching configuration or secrets from an external system at startup
+
+**View logs from each container separately:**
+
+```bash
+kubectl apply -f init-container-msg.yaml
+
+# init container logs (already finished, shows what it wrote)
+kubectl logs <pod-name> -c init-container-msg-container-init
+
+# main container logs (running, prints the file every 5 seconds)
+kubectl logs -f <pod-name> -c init-container-msg-container-main
+
+kubectl delete -f init-container-msg.yaml
+```
+
+---
+
 The most important  takeaway:
 
 > A Deployment is not just “a YAML that runs Pods.” It is a reconciliation and rollout primitive. Production-quality Deployments depend on correct selectors, stable labels, readiness behavior, resource requests, rollout strategy, failure detection, security context, disruption handling, and observability.
