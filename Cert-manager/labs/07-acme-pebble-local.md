@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: pebble
-          image: letsencrypt/pebble:latest
+          image: ghcr.io/letsencrypt/pebble:latest
           env:
             - name: PEBBLE_VA_NOSLEEP
               value: "1"
@@ -84,6 +84,7 @@ spec:
   acme:
     email: devnull@localhost
     server: https://pebble.pebble.svc.cluster.local:14000/dir
+    skipTLSVerify: true
     privateKeySecretRef:
       name: pebble-acme-account-key
     solvers:
@@ -92,6 +93,8 @@ spec:
             ingressClassName: traefik
 EOF
 ```
+
+For local Pebble labs, `skipTLSVerify: true` is the fastest way to avoid test-CA trust and hostname mismatch issues. Use this only in local/dev labs, not in production.
 
 Because Pebble uses a test CA, configure cert-manager controller trust for Pebble CA only if needed in your setup. If issuer stays NotReady with TLS errors, inspect controller logs and switch to an alternative local ACME setup that includes trusted CA wiring.
 
@@ -199,3 +202,33 @@ You are ready for Lab 08 when:
 
 - You can read ACME lifecycle from `Order` and `Challenge`
 - You can diagnose solver routing and issuer readiness problems
+
+## End-of-Lab Cleanup (Consolidated)
+
+Use this section if you want one final cleanup block at the end of the lab.
+
+Standard cleanup (keeps cert-manager installed):
+
+```bash
+kubectl delete ingress,svc,deploy -n sandbox hello-pebble --ignore-not-found
+kubectl delete certificate,certificaterequest,order,challenge -n sandbox --all --ignore-not-found
+kubectl delete secret -n sandbox pebble-localhost-tls --ignore-not-found
+kubectl delete clusterissuer pebble-acme --ignore-not-found
+kubectl delete ns pebble --ignore-not-found
+```
+
+Optional full reset (only if this cluster is dedicated to this lab):
+
+```bash
+kubectl delete ns sandbox --ignore-not-found
+# Optional: remove cert-manager as well
+# helm uninstall cert-manager -n cert-manager
+# kubectl delete ns cert-manager --ignore-not-found
+```
+
+Optional host cleanup:
+
+```bash
+# Remove local hostname if no longer needed
+# sudo sed -i '/pebble.localhost/d' /etc/hosts
+```

@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello-auto-ingress
+  namespace: sandbox
+  annotations:
+    cert-manager.io/cluster-issuer: local-ca-issuer
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - auto.localhost
+      secretName: auto-localhost-tls
+  rules:
+    - host: auto.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello-auto
+                port:
+                  number: 80

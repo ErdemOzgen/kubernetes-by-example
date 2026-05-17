@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staging-real-domain
+  namespace: sandbox
+spec:
+  secretName: staging-real-domain-tls
+  dnsNames:
+    - app.example.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-staging-dns01

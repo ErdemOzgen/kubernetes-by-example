@@ -8,9 +8,57 @@ Practice forced renewal and verify private key rotation behavior in cert-manager
 
 Certificate issuance is easy. Safe lifecycle management (renewal, rotation, app reload behavior) is where production systems fail.
 
-## Assumption
+## Standalone Mode (No Previous Labs Required)
 
-A working certificate exists in namespace `sandbox` (for example from Lab 04).
+This lab can be run on a fresh k3d cluster without completing earlier labs.
+
+Default resources used by this lab:
+
+- Certificate: `renewal-demo-cert`
+- TLS Secret: `renewal-demo-tls`
+- Deployment: `renewal-nginx`
+- Service: `renewal-nginx`
+- Ingress: `renewal-nginx`
+- Hostname: `renewal.localhost`
+- Issuer: `renewal-selfsigned`
+
+## Step 0 - Standalone Bootstrap
+
+Create namespace and install cert-manager if not already installed:
+
+```bash
+kubectl create ns sandbox --dry-run=client -o yaml | kubectl apply -f -
+
+if ! helm -n cert-manager status cert-manager >/dev/null 2>&1; then
+  helm install \
+    cert-manager oci://quay.io/jetstack/charts/cert-manager \
+    --version v1.20.2 \
+    --namespace cert-manager \
+    --create-namespace \
+    --set crds.enabled=true
+fi
+
+kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
+kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+```
+
+Apply standalone bootstrap resources for this lab:
+
+```bash
+echo "127.0.0.1 renewal.localhost" | sudo tee -a /etc/hosts
+kubectl apply -f Cert-manager/labs/manifests/05-renewal-standalone-bootstrap.yaml
+kubectl wait --for=condition=Ready certificate/renewal-demo-cert -n sandbox --timeout=180s
+curl -vk https://renewal.localhost:8443/
+```
+
+Set reusable variables for the rest of the lab:
+
+```bash
+CERT_NAME=renewal-demo-cert
+SECRET_NAME=renewal-demo-tls
+DEPLOY_NAME=renewal-nginx
+```
 
 ## Step 1 - Inspect Current Certificate State
 
@@ -23,17 +71,14 @@ kubectl get secret -n sandbox
 If `cmctl` is installed:
 
 ```bash
-cmctl status certificate -n sandbox <certificate-name>
+cmctl status certificate -n sandbox ${CERT_NAME}
 ```
 
 ## Step 2 - Capture Current Key Fingerprint
 
-Replace placeholders:
+Use the defaults from Step 0:
 
 ```bash
-CERT_NAME=<certificate-name>
-SECRET_NAME=<tls-secret-name>
-
 kubectl get secret -n sandbox ${SECRET_NAME} -o jsonpath='{.data.tls\.key}' | base64 -d > /tmp/before.key
 openssl pkey -in /tmp/before.key -pubout -outform pem | openssl sha256
 ```
@@ -88,8 +133,8 @@ Questions to answer in your cluster:
 Run practical check:
 
 ```bash
-kubectl rollout restart deploy -n sandbox <deployment-name>
-kubectl rollout status deploy -n sandbox <deployment-name>
+kubectl rollout restart deploy -n sandbox ${DEPLOY_NAME}
+kubectl rollout status deploy -n sandbox ${DEPLOY_NAME}
 ```
 
 ## Failure Injection
@@ -110,6 +155,28 @@ Expected: validation or reconciliation errors depending on version and policy.
 kubectl describe certificate -n sandbox ${CERT_NAME}
 kubectl describe certificaterequest -n sandbox
 kubectl logs -n cert-manager deploy/cert-manager --tail=200
+```
+
+## Cleanup
+
+Default cleanup (remove only Lab 05 standalone resources):
+
+```bash
+kubectl delete ingress -n sandbox renewal-nginx --ignore-not-found
+kubectl delete certificate -n sandbox renewal-demo-cert --ignore-not-found
+kubectl delete secret -n sandbox renewal-demo-tls --ignore-not-found
+kubectl delete deploy,svc -n sandbox renewal-nginx --ignore-not-found
+kubectl delete clusterissuer renewal-selfsigned --ignore-not-found
+rm -f /tmp/before.key /tmp/after.key /tmp/after.crt
+```
+
+Optional full cleanup (only if this cluster is dedicated to this lab):
+
+```bash
+kubectl delete ns sandbox --ignore-not-found
+# Optional: remove cert-manager as well
+# helm uninstall cert-manager -n cert-manager
+# kubectl delete ns cert-manager --ignore-not-found
 ```
 
 ## Exit Criteria

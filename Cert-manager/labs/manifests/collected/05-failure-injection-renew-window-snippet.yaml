@@ -1,0 +1,5 @@
+# Partial YAML snippet from Lab 05 failure injection example.
+# This is not a full Kubernetes resource by itself.
+spec:
+  duration: 2h
+  renewBefore: 3h

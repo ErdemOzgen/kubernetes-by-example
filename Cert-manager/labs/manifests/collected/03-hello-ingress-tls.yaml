@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello-ingress
+  namespace: sandbox
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - app.localhost
+      secretName: app-localhost-tls
+  rules:
+    - host: app.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello
+                port:
+                  number: 80

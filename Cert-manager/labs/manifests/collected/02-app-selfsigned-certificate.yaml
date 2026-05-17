@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: app-selfsigned
+  namespace: sandbox
+spec:
+  secretName: app-selfsigned-tls
+  commonName: app.localhost
+  dnsNames:
+    - app.localhost
+    - api.localhost
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned-bootstrap
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth

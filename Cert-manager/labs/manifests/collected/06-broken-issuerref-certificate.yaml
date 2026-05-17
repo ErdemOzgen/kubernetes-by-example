@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: broken-issuerref
+  namespace: sandbox
+spec:
+  secretName: broken-issuerref-tls
+  dnsNames:
+    - broken.localhost
+  issuerRef:
+    name: does-not-exist
+    kind: ClusterIssuer
