@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-selfsigned
+  namespace: sandbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-selfsigned
+  template:
+    metadata:
+      labels:
+        app: nginx-selfsigned
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-selfsigned
+  namespace: sandbox
+spec:
+  selector:
+    app: nginx-selfsigned
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nginx-selfsigned-cert
+  namespace: sandbox
+spec:
+  secretName: nginx-selfsigned-tls
+  commonName: nginx.localhost
+  dnsNames:
+    - nginx.localhost
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned-bootstrap
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-selfsigned
+  namespace: sandbox
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - nginx.localhost
+      secretName: nginx-selfsigned-tls
+  rules:
+    - host: nginx.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-selfsigned
+                port:
+                  number: 80
